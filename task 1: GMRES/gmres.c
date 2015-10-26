@@ -84,6 +84,7 @@ double iteration_param =  0;
 Vector tmp_vector = {0};
 double residual_norm = 0;
 
+long int numb_of_iterations = 0;
 //------------------------------------------------------------------------------
 // Getting the file path
 //------------------------------------------------------------------------------
@@ -273,28 +274,12 @@ do
                 exit (EXIT_FAILURE);
                 }
 
-        for (i = 0; i < residual.size_of_vector; i++)
-                {
-                printf ("\t%lg", residual.vector_ptr[i]);
-                printf ("\n");
-                }
-
-        printf ("\n");
-
         // 2nd part
         if (sum_of_vectors (&residual, &mult_vector, YES) != 0)
                 {
                 printf ("error in residual multiply_matrix_on_vector\n");
                 exit (EXIT_FAILURE);
                 }
-
-        for (i = 0; i < residual.size_of_vector; i++)
-                {
-                printf ("\t%lg", residual.vector_ptr[i]);
-                printf ("\n");
-                }
-
-        printf ("\n");
         //------------------------------------------------------------------------------
         // calculation of the 'iteration_param'
         //------------------------------------------------------------------------------
@@ -306,38 +291,23 @@ do
 
         iteration_param  = scalar_multiplication_of_vectors (&tmp_vector, &residual);
         iteration_param /= scalar_multiplication_of_vectors (&tmp_vector, &tmp_vector);
-        printf ("%lg\n", iteration_param);
-        printf ("\n");
         //------------------------------------------------------------------------------
         // calculation of the next 'approx_solution'
         //------------------------------------------------------------------------------
-        if (multiply_scalar_on_vector (iteration_param, &residual) != 0)
+        for (i = 0; i < residual.size_of_vector; i++)
+                tmp_vector.vector_ptr[i] = residual.vector_ptr[i];
+
+        if (multiply_scalar_on_vector (iteration_param, &tmp_vector) != 0)
                 {
                 printf ("error in multiply_scalar_on_vector\n");
                 exit (EXIT_FAILURE);
                 }
 
-        for (i = 0; i < residual.size_of_vector; i++)
-                {
-                printf ("\t%lg", residual.vector_ptr[i]);
-                printf ("\n");
-                }
-
-        printf ("\n");
-
-        if (sum_of_vectors (&approx_solution, &residual, NO) != 0)
+        if (sum_of_vectors (&approx_solution, &tmp_vector, YES) != 0)
                 {
                 printf ("error in residual multiply_matrix_on_vector\n");
                 exit (EXIT_FAILURE);
                 }
-
-        for (i = 0; i < approx_solution.size_of_vector; i++)
-                {
-                printf ("\t%lg", approx_solution.vector_ptr[i]);
-                printf ("\n");
-                }
-
-        printf ("\n");
         //------------------------------------------------------------------------------
         // calculation of residual norm (in order to determine when to stop calculation cycle),
         //      I use the third norm: Euclidean norm (but I squared the calc_error,
@@ -345,8 +315,12 @@ do
         //------------------------------------------------------------------------------
         residual_norm = scalar_multiplication_of_vectors (&residual, &residual);
         //------------------------------------------------------------------------------
+        printf ("numb_of_iterations = \t%ld\n", ++numb_of_iterations);
+        printf ("calc_error_squared = \t%g\n", calc_error_squared);
+        printf ("residual_norm = \t%g\n\n", residual_norm);
+        //------------------------------------------------------------------------------
         }
-        while (residual_norm > calc_error_squared);
+while (residual_norm > calc_error_squared);
 
 
 //------------------------------------------------------------------------------
