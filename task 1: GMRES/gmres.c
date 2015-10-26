@@ -33,9 +33,13 @@
 #endif
 //------------------------------------------------------------------------------
 
+#define YES 1
+#define NO  0
+
+
 typedef struct vector   // you could use 1D Matrix, but it will cause inconveniencies
         {               // with dereferencing double pointers
-        int* vector_ptr;
+        double* vector_ptr;
 
         int size_of_vector;
         } Vector;
@@ -50,6 +54,10 @@ typedef struct matrix
         int size_of_matrix;         // if it is square matrix
         } Matrix;
 
+int multiply_scalar_on_vector (double scalar, Vector* vector_ptr);
+int sum_of_vectors (Vector* vector_1_ptr, const Vector* vector_2_ptr, int is_substraction);
+double scalar_multiplication_of_vectors (const Vector* vector_1_ptr, const Vector* vector_2_ptr);
+
 int transpose_matrix (Matrix* matrix);
 int multiply_matrix_on_vector (const Matrix* matrix_ptr, const Vector* vector_ptr, Vector* result_vector_ptr);
 int multiply_matrix_on_matrix (const Matrix* first_matrix_ptr, const Matrix* second_matrix_ptr, Matrix* result_matrix_ptr);
@@ -58,7 +66,7 @@ int main (int argc, char* argv[])
 {
 FILE* task_file = NULL;
 
-double calc_error     = 0;
+double calc_error     = 0, calc_error_squared = 0;;
 int    size_of_matrix = 0; // I know, that from task_gen it should be 'long',
                            //      not 'int', but whatever...=)
 
@@ -67,8 +75,14 @@ int cur_line = 0, cur_column = 0;
 int ret_val = 0;
 
 Vector vector_of_free_terms = {0}, mult_vector = {0};
-
 Matrix matrix = {0}, transpon_matrix = {0}, mult_matrix = {0};
+
+Vector approx_solution = {0}; // zero_approx = 0
+Vector residual        = {0}; // residual = nevyazka (rus) =)
+double iteration_param =  0;
+
+Vector tmp_vector = {0};
+double residual_norm = 0;
 
 //------------------------------------------------------------------------------
 // Getting the file path
@@ -112,7 +126,7 @@ mult_matrix.size_of_matrix  = size_of_matrix;
 // Allocate an 1D array for 'vector_of_free_terms', an 2D array for 'matrix',
 // another 2D array for 'transponed matrix' and for 'mult_matrix' ((A^T)*T)
 //------------------------------------------------------------------------------
-vector_of_free_terms.vector_ptr = (int*) calloc (vector_of_free_terms.size_of_vector, sizeof (int));
+vector_of_free_terms.vector_ptr = (double*) calloc (vector_of_free_terms.size_of_vector, sizeof (double));
 assert (vector_of_free_terms.vector_ptr != NULL);
 
 matrix.matrix_ptr = (int**) calloc (matrix.size_of_matrix, sizeof (int*));
@@ -143,7 +157,7 @@ for (i = 0; i < mult_matrix.size_of_matrix; i++)
 //      and close the file stream
 //------------------------------------------------------------------------------
 for (i = 0; i < vector_of_free_terms.size_of_vector; i++)
-        if (((ret_val = fscanf (task_file, "%d", &vector_of_free_terms.vector_ptr[i])) <= 0) || (errno != 0))
+        if (((ret_val = fscanf (task_file, "%lg", &vector_of_free_terms.vector_ptr[i])) <= 0) || (errno != 0))
                 HANDLE_ERROR ("vector_of_free_terms.vector_ptr fscanf");
 
 for (cur_line = 0; cur_line < matrix.size_of_matrix; cur_line++)
@@ -204,14 +218,14 @@ printf ("\n");
 //------------------------------------------------------------------------------
 for (i = 0; i < vector_of_free_terms.size_of_vector; i++)
         {
-        printf ("\t%d", vector_of_free_terms.vector_ptr[i]);
+        printf ("\t%lg", vector_of_free_terms.vector_ptr[i]);
         printf ("\n");
         }
 
 printf ("\n");
 
 mult_vector.size_of_vector = vector_of_free_terms.size_of_vector;
-mult_vector.vector_ptr = (int*) calloc (mult_vector.size_of_vector, sizeof (int));
+mult_vector.vector_ptr = (double*) calloc (mult_vector.size_of_vector, sizeof (double));
 assert (mult_vector.vector_ptr != NULL);
 
 if (multiply_matrix_on_vector (&transpon_matrix, &vector_of_free_terms, &mult_vector) != 0)
@@ -222,21 +236,141 @@ if (multiply_matrix_on_vector (&transpon_matrix, &vector_of_free_terms, &mult_ve
 
 for (i = 0; i < mult_vector.size_of_vector; i++)
         {
-        printf ("\t%d", mult_vector.vector_ptr[i]);
+        printf ("\t%lg", mult_vector.vector_ptr[i]);
         printf ("\n");
         }
 
 printf ("\n");
 //------------------------------------------------------------------------------
-// 
+// Let's implement the main algorithm
 //------------------------------------------------------------------------------
+residual.size_of_vector = matrix.size_of_matrix;
+residual.vector_ptr = (double*) calloc (residual.size_of_vector, sizeof (double));
+assert (residual.vector_ptr != NULL);
+
+approx_solution.size_of_vector = matrix.size_of_matrix;
+approx_solution.vector_ptr = (double*) calloc (approx_solution.size_of_vector, sizeof (double));
+assert (approx_solution.vector_ptr != NULL);
+
+for (i = 0; i < approx_solution.size_of_vector; i++)
+        approx_solution.vector_ptr[i] = 0;     // zero approximation will be 0
+
+tmp_vector.size_of_vector = matrix.size_of_matrix;
+tmp_vector.vector_ptr = (double*) calloc (tmp_vector.size_of_vector, sizeof (double));
+assert (tmp_vector.vector_ptr != NULL);
+
+calc_error_squared = calc_error * calc_error;
+
+do
+        {
+        //------------------------------------------------------------------------------
+        // calculation of the 'residual'
+        //------------------------------------------------------------------------------
+        // 1st part
+        if (multiply_matrix_on_vector (&mult_matrix, &approx_solution, &residual) != 0)
+                {
+                printf ("error in residual multiply_matrix_on_vector\n");
+                exit (EXIT_FAILURE);
+                }
+
+        for (i = 0; i < residual.size_of_vector; i++)
+                {
+                printf ("\t%lg", residual.vector_ptr[i]);
+                printf ("\n");
+                }
+
+        printf ("\n");
+
+        // 2nd part
+        if (sum_of_vectors (&residual, &mult_vector, YES) != 0)
+                {
+                printf ("error in residual multiply_matrix_on_vector\n");
+                exit (EXIT_FAILURE);
+                }
+
+        for (i = 0; i < residual.size_of_vector; i++)
+                {
+                printf ("\t%lg", residual.vector_ptr[i]);
+                printf ("\n");
+                }
+
+        printf ("\n");
+        //------------------------------------------------------------------------------
+        // calculation of the 'iteration_param'
+        //------------------------------------------------------------------------------
+        if (multiply_matrix_on_vector (&mult_matrix, &residual, &tmp_vector) != 0)
+                {
+                printf ("error in iteration_param multiply_matrix_on_vector\n");
+                exit (EXIT_FAILURE);
+                }
+
+        iteration_param  = scalar_multiplication_of_vectors (&tmp_vector, &residual);
+        iteration_param /= scalar_multiplication_of_vectors (&tmp_vector, &tmp_vector);
+        printf ("%lg\n", iteration_param);
+        printf ("\n");
+        //------------------------------------------------------------------------------
+        // calculation of the next 'approx_solution'
+        //------------------------------------------------------------------------------
+        if (multiply_scalar_on_vector (iteration_param, &residual) != 0)
+                {
+                printf ("error in multiply_scalar_on_vector\n");
+                exit (EXIT_FAILURE);
+                }
+
+        for (i = 0; i < residual.size_of_vector; i++)
+                {
+                printf ("\t%lg", residual.vector_ptr[i]);
+                printf ("\n");
+                }
+
+        printf ("\n");
+
+        if (sum_of_vectors (&approx_solution, &residual, NO) != 0)
+                {
+                printf ("error in residual multiply_matrix_on_vector\n");
+                exit (EXIT_FAILURE);
+                }
+
+        for (i = 0; i < approx_solution.size_of_vector; i++)
+                {
+                printf ("\t%lg", approx_solution.vector_ptr[i]);
+                printf ("\n");
+                }
+
+        printf ("\n");
+        //------------------------------------------------------------------------------
+        // calculation of residual norm (in order to determine when to stop calculation cycle),
+        //      I use the third norm: Euclidean norm (but I squared the calc_error,
+        //      rather than square_rooted the norm)
+        //------------------------------------------------------------------------------
+        residual_norm = scalar_multiplication_of_vectors (&residual, &residual);
+        //------------------------------------------------------------------------------
+        }
+        while (residual_norm > calc_error_squared);
 
 
+//------------------------------------------------------------------------------
+// Printing the answer
+//------------------------------------------------------------------------------
+printf ("\nThe answer is:\n");
+for (i = 0; i < approx_solution.size_of_vector; i++)
+        {
+        printf ("\t%lg\n", approx_solution.vector_ptr[i]);
+        }
+
+printf ("\n");
+//------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------
 // Cleanup
 //------------------------------------------------------------------------------
 
+
+free (tmp_vector.vector_ptr);
+
+free (approx_solution.vector_ptr);
+
+free (residual.vector_ptr);
 
 free (mult_vector.vector_ptr);
 
@@ -258,6 +392,61 @@ free (vector_of_free_terms.vector_ptr);
 return 0;
 }
 
+
+int multiply_scalar_on_vector (double scalar, Vector* vector_ptr)
+{
+int i = 0;
+Vector vector = *vector_ptr;
+
+assert ((vector_ptr != 0) && (vector_ptr->vector_ptr != 0));
+
+for (i = 0; i < vector.size_of_vector; i++)
+        vector.vector_ptr[i] *= scalar;
+
+*vector_ptr = vector;
+
+return 0;
+}
+
+int sum_of_vectors (Vector* vector_1_ptr, const Vector* vector_2_ptr, int is_substraction)
+{
+int i = 0;
+
+      Vector vector_1 = *vector_1_ptr;
+const Vector vector_2 = *vector_2_ptr;
+
+assert ((vector_1_ptr != 0) && (vector_2_ptr != 0));
+assert ((vector_1_ptr->vector_ptr != 0) && (vector_2_ptr->vector_ptr != 0));
+assert ((vector_1_ptr->size_of_vector) == (vector_2_ptr->size_of_vector));
+
+for (i = 0; i < vector_1.size_of_vector; i++)
+        if (is_substraction != 0)
+                vector_1.vector_ptr[i] -= vector_2.vector_ptr[i];
+        else
+                vector_1.vector_ptr[i] += vector_2.vector_ptr[i];
+
+*vector_1_ptr = vector_1;
+
+return 0;
+}
+
+double scalar_multiplication_of_vectors (const Vector* vector_1_ptr, const Vector* vector_2_ptr)
+{
+int i = 0;
+double result = 0;
+
+const Vector vector_1 = *vector_1_ptr;
+const Vector vector_2 = *vector_2_ptr;
+
+assert ((vector_1_ptr != 0) && (vector_2_ptr != 0));
+assert ((vector_1_ptr->vector_ptr != 0) && (vector_2_ptr->vector_ptr != 0));
+assert ((vector_1_ptr->size_of_vector) == (vector_2_ptr->size_of_vector));
+
+for (i = 0; i < vector_1.size_of_vector; i++)
+        result += (vector_1.vector_ptr[i] * vector_2.vector_ptr[i]);
+
+return result;
+}
 
 int transpose_matrix (Matrix* matrix)
 {
